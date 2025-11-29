@@ -109,8 +109,8 @@ This application includes **Role-Based Access Control (RBAC)**, secure authentic
 ### 1. Clone the repository
 
 ```bash
-git clone <https://github.com/rimu-7/corporate-team-portal>
-cd <corporate-team-portal>
+git clone https://github.com/rimu-7/corporate-team-portal
+cd corporate-team-portal
 ```
 
 ### 2. Install Dependencies
