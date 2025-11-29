@@ -1,0 +1,55 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Enum Definition
+enum Role {
+    ADMIN
+    MANAGER
+    USER
+    GUEST
+}
+
+// 2. User Model
+model User {
+    id       String  @id @default(cuid())
+    name     String
+    email    String  @unique
+    password String
+    role     Role    @default(USER)
+    // Relation Fields
+    // In MySQL, we explicitly define the foreign key column
+    teamId   String?
+    team     Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Optional: Add indexes for performance if you search by team often
+    @@index([email])
+    @@index([role])
+    @@index([teamId])
+
+    //map
+    @@map("users")
+}
+
+// 3. Team Model
+model Team {
+    id          String  @id @default(cuid())
+    name        String  @unique
+    description String?
+    code        String  @unique
+
+    // Relation (One Team has many Members)
+    members User[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
