@@ -1,23 +1,16 @@
 "use client";
 
 import { useAuth } from "@/app/context/AuthContext";
-import { Role, User } from "@/app/types";
+import { Role, User, Team } from "@/app/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function AdminPanel() {
   const { user, isLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const router = useRouter();
+  const [teams, setTeams] = useState<Team[]>([]);
   const [message, setMessage] = useState("");
-
-  // Hardcoded for demo - ideally fetch from /api/teams
-  const teams = [
-    { id: "", name: "No Team" },
-    { id: "cm4238e550000u9208y8e8w4a", name: "Engineering" }, // Replace with real IDs from your DB seed
-    { id: "cm4238e550001u920xyz12345", name: "Marketing" }, // Replace with real IDs
-    { id: "cm4238e550002u920abc67890", name: "Operations" }, // Replace with real IDs
-  ];
+  const router = useRouter();
 
   const refreshUsers = async () => {
     try {
@@ -25,7 +18,25 @@ export default function AdminPanel() {
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch users:", e);
+    }
+  };
+
+  const refreshTeams = async () => {
+    try {
+      const res = await fetch("/api/team");
+      const contentType = res.headers.get("content-type");
+
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned non-JSON response: ${res.status} ${res.statusText}`
+        );
+      }
+
+      const data = await res.json();
+      setTeams(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to fetch teams:", e);
     }
   };
 
@@ -35,47 +46,70 @@ export default function AdminPanel() {
         router.push("/dashboard");
         return;
       }
+
+      // Load users + teams when admin is confirmed
       refreshUsers();
+      refreshTeams();
     }
   }, [user, isLoading, router]);
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setMessage("");
     try {
-      const res = await fetch(`/api/user/${userId}`, {
+      const res = await fetch(`/api/user/${userId}/role`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: newRole }),
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned non-JSON response: ${res.status} ${res.statusText}`
+        );
+      }
+
       const data = await res.json();
+
       if (res.ok) {
         setMessage(`Success: ${data.message}`);
         refreshUsers();
       } else {
-        alert(data.error);
+        alert(data.error || "Server Error");
       }
     } catch (e) {
-      alert("Failed to update role");
+      console.error("Update failed:", e);
+      alert(e instanceof Error ? e.message : "Failed to update role");
     }
   };
 
   const handleTeamChange = async (userId: string, teamId: string) => {
     setMessage("");
     try {
-      const res = await fetch(`/api/user/${userId}`, {
+      const res = await fetch(`/api/user/${userId}/team`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId: teamId === "" ? "" : teamId }), // Send empty string to remove
+        body: JSON.stringify({ teamId: teamId === "" ? "" : teamId }),
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned non-JSON response: ${res.status} ${res.statusText}`
+        );
+      }
+
       const data = await res.json();
+
       if (res.ok) {
         setMessage(`Success: ${data.message}`);
         refreshUsers();
       } else {
-        alert(data.error);
+        alert(data.error || "Server Error");
       }
     } catch (e) {
-      alert("Failed to update team");
+      console.error("Team update failed:", e);
+      alert(e instanceof Error ? e.message : "Failed to update team");
     }
   };
 
@@ -83,7 +117,7 @@ export default function AdminPanel() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8 ">System Administration</h1>
+      <h1 className="text-3xl font-bold mb-8">System Administration</h1>
 
       {message && (
         <div className="bg-green-100 text-green-700 p-3 mb-4 rounded">
@@ -91,9 +125,9 @@ export default function AdminPanel() {
         </div>
       )}
 
-      <div className=" rounded-lg shadow overflow-x-auto">
+      <div className="rounded-lg shadow overflow-x-auto">
         <table className="min-w-full divide-y-4">
-          <thead className="">
+          <thead>
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                 User
@@ -112,17 +146,25 @@ export default function AdminPanel() {
               </th>
             </tr>
           </thead>
-          <tbody className=" divide-y-2">
+          <tbody className="divide-y-2">
             {users.map((u) => (
-              <tr key={u.id} className="hover:bg-green-500">
+              <tr key={u.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4">
-                  <div className="text-sm font-medium ">{u.name}</div>
+                  <div className="text-sm font-medium">{u.name}</div>
                   <div className="text-sm text-gray-500">{u.email}</div>
                 </td>
 
                 {/* Role Display */}
                 <td className="px-6 py-4">
-                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-300">
+                  <span
+                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      u.role === Role.ADMIN
+                        ? "bg-red-100 text-red-800"
+                        : u.role === Role.MANAGER
+                        ? "bg-purple-100 text-purple-800"
+                        : "bg-blue-100 text-blue-800"
+                    }`}
+                  >
                     {u.role}
                   </span>
                 </td>
@@ -130,15 +172,23 @@ export default function AdminPanel() {
                 {/* Role Actions */}
                 <td className="px-6 py-4">
                   <select
-                    className="text-sm border rounded p-1"
+                    className="text-sm border rounded p-1 disabled:bg-gray-100 disabled:text-gray-400"
                     value={u.role}
                     onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                    disabled={u.id === user?.id} // Cannot change own role
+                    disabled={u.id === user?.id || u.role === Role.ADMIN}
                   >
                     <option value="USER">User</option>
                     <option value="MANAGER">Manager</option>
-                    <option value="ADMIN">Admin</option>
+                    {u.role === Role.ADMIN && (
+                      <option value="ADMIN">Admin</option>
+                    )}
                   </select>
+
+                  {u.role === Role.ADMIN && u.id !== user?.id && (
+                    <div className="text-[10px] text-red-400 mt-1">
+                      Locked (Admin)
+                    </div>
+                  )}
                 </td>
 
                 {/* Team Display */}
@@ -148,25 +198,24 @@ export default function AdminPanel() {
 
                 {/* Team Actions */}
                 <td className="px-6 py-4">
-                  <div className="flex gap-2">
-                    {/* Note: In a real app, you'd fetch teams from an API to populate this dropdown */}
-                    <input
-                      type="text"
-                      placeholder="Paste Team ID"
-                      className="text-xs border rounded p-1 w-32"
-                      onBlur={(e) => {
-                        if (e.target.value)
-                          handleTeamChange(u.id, e.target.value);
-                      }}
-                    />
-                    <button
-                      onClick={() => handleTeamChange(u.id, "")}
-                      className="text-xs text-red-600 hover:text-red-800"
-                      title="Remove from team"
+                  {teams.length > 0 ? (
+                    <select
+                      className="text-sm border rounded p-1 min-w-[150px]"
+                      value={u.team?.id || ""}
+                      onChange={(e) => handleTeamChange(u.id, e.target.value)}
                     >
-                      Clear
-                    </button>
-                  </div>
+                      <option value="">Unassigned</option>
+                      {teams.map((team) => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs text-gray-400">
+                      No teams found. Seed or create teams first.
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
